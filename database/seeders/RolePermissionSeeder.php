@@ -41,8 +41,8 @@ class RolePermissionSeeder extends Seeder
             // View-only access to other modules
             'view_vendor',
             'view_any_vendor',
-            'view_purchase::order',
-            'view_any_purchase::order',
+            'view_purchase_order',
+            'view_any_purchase_order',
             'view_service',
             'view_any_service',
             'view_category',
@@ -62,8 +62,8 @@ class RolePermissionSeeder extends Seeder
             // View-only access to suppliers and tour packages
             'view_vendor',
             'view_any_vendor',
-            'view_purchase::order',
-            'view_any_purchase::order',
+            'view_purchase_order',
+            'view_any_purchase_order',
         ]);
 
         // Package Coordinator - Supplier and tour package management
