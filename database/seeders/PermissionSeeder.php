@@ -78,14 +78,16 @@ class PermissionSeeder extends Seeder
         $this->createPermissions([
             'page_Dashboard',
             'page_Settings',
-            'page_Reports'
+            'page_Reports',
+            'page_InvoiceSettingsPage'
         ]);
 
         // Widget permissions
         $this->createPermissions([
             'widget_RevenueChart',
             'widget_InvoiceStats',
-            'widget_RecentTransactions'
+            'widget_RecentTransactions',
+            'widget_FinancialOverview'
         ]);
     }
 
