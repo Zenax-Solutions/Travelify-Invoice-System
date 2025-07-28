@@ -30,6 +30,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Support\Enums\MaxWidth;
+use ShuvroRoy\FilamentSpatieLaravelBackup\FilamentSpatieLaravelBackupPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -42,6 +43,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(asset('logo/logo.png'))
             ->brandLogoHeight('3.5rem')
             ->databaseNotifications()
+            ->plugin(FilamentSpatieLaravelBackupPlugin::make())
             ->brandName('Travelify - Travel Agency Management')
             ->maxContentWidth(MaxWidth::Full)
             ->login()
