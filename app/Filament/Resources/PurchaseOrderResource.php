@@ -361,6 +361,9 @@ class PurchaseOrderResource extends Resource
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         'pending' => 'warning',
+                        'approved' => 'success',
+                        'received' => 'info',
+                        'cancelled' => 'danger',
                         'paid' => 'success',
                         'partially_paid' => 'info',
                         'cancelled' => 'danger',
