@@ -25,7 +25,7 @@ class OriginalFinancialOverview extends BaseWidget
     public function mount(): void
     {
         $this->year = (string) Carbon::now()->year;
-        $this->month = (string) Carbon::now()->month;
+        $this->month = null;
     }
 
     protected function getStats(): array
