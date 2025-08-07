@@ -23,9 +23,10 @@ class CurrentDayToursTable extends BaseWidget
             ->query(
                 Invoice::query()
                     ->whereDate('tour_date', now()->toDateString())
+                    ->where('status', 'paid')
                     ->orderBy('tour_date')
             )
-            ->emptyStateHeading('No Tours Today')
+            ->emptyStateHeading('No Paid Tours Today')
             ->columns([
                 TextColumn::make('invoice_number')
                     ->searchable(),
@@ -46,6 +47,7 @@ class CurrentDayToursTable extends BaseWidget
                         'overdue' => 'danger',
                         'cancelled' => 'gray',
                         'partially_paid' => 'info',
+                        'refunded' => 'info'
                     }),
             ]);
     }
