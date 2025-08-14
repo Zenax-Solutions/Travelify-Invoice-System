@@ -416,7 +416,7 @@ class PenaltyResource extends Resource
                         'low' => 'success',
                         default => 'gray'
                     })
-                    ->visible(fn($record) => $record->requires_invoice_reissue)
+                    ->visible(fn($record) => $record && $record->requires_invoice_reissue)
                     ->toggleable(),
 
                 Tables\Columns\IconColumn::make('invoice_reissued')
@@ -426,7 +426,7 @@ class PenaltyResource extends Resource
                     ->falseIcon('heroicon-o-clock')
                     ->trueColor('success')
                     ->falseColor('warning')
-                    ->visible(fn($record) => $record->requires_invoice_reissue)
+                    ->visible(fn($record) => $record && $record->requires_invoice_reissue)
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('reissuedInvoice.invoice_number')
@@ -434,7 +434,7 @@ class PenaltyResource extends Resource
                     ->color('primary')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->tooltip('Re-issued invoice number')
-                    ->visible(fn($record) => $record->invoice_reissued && $record->reissued_invoice_id)
+                    ->visible(fn($record) => $record && $record->invoice_reissued && $record->reissued_invoice_id)
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('created_at')
