@@ -382,144 +382,161 @@ class PurchaseOrderResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                // Primary Actions Group - Most frequently used
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make()
+                        ->color('primary'),
 
-                // Print Action
-                Tables\Actions\Action::make('print')
-                    ->label('Print')
-                    ->icon('heroicon-o-printer')
-                    ->url(fn(PurchaseOrder $record): string => route('purchase-orders.print', $record))
-                    ->openUrlInNewTab(),
+                    Tables\Actions\Action::make('addPayment')
+                        ->label('Add Payment')
+                        ->icon('heroicon-o-currency-dollar')
+                        ->color('success')
+                        ->form([
+                            Forms\Components\Placeholder::make('payable_amount')
+                                ->label('Payable Amount')
+                                ->content(fn(\App\Models\PurchaseOrder $record): string => 'Rs' . number_format($record->remaining_balance, 2)),
+                            Forms\Components\TextInput::make('amount')
+                                ->label('Payment Amount')
+                                ->numeric()
+                                ->required()
+                                ->step(0.01)
+                                ->maxValue(fn(\App\Models\PurchaseOrder $record): float => $record->remaining_balance),
+                            Forms\Components\DatePicker::make('payment_date')
+                                ->label('Payment Date')
+                                ->required()
+                                ->default(now()),
+                            Forms\Components\Select::make('payment_method')
+                                ->label('Payment Method')
+                                ->options([
+                                    'Cash' => 'Cash',
+                                    'Bank Transfer' => 'Bank Transfer',
+                                    'Card' => 'Card',
+                                    'Other' => 'Other',
+                                ])
+                                ->nullable(),
+                            Forms\Components\Textarea::make('notes')
+                                ->columnSpan('full'),
+                        ])
+                        ->action(function (array $data, \App\Models\PurchaseOrder $record): void {
+                            $record->payments()->create([
+                                'amount' => $data['amount'],
+                                'payment_date' => $data['payment_date'],
+                                'payment_method' => $data['payment_method'],
+                                'notes' => $data['notes'],
+                            ]);
 
-                // Download PDF Action
-                Tables\Actions\Action::make('download')
-                    ->label('Download PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->action(function (PurchaseOrder $record) {
-                        $settings = Setting::getMany([
-                            'invoice_company_name',
-                            'invoice_company_tagline',
-                            'invoice_logo_enabled',
-                            'invoice_show_contact_info',
-                            'invoice_contact_numbers',
-                            'invoice_show_logo_section',
-                            'invoice_show_customer_section',
-                            'invoice_show_contact_section',
-                            'invoice_show_invoice_details_section',
-                            'invoice_show_services_table',
-                            'invoice_show_payment_info',
-                            'invoice_show_terms_section',
-                            'invoice_show_footer_section',
-                            'invoice_payment_accounts',
-                            'invoice_footer_note',
-                            'invoice_thank_you_message',
-                            'invoice_additional_info',
-                            'invoice_primary_color',
-                            'invoice_secondary_color',
-                            'invoice_text_color',
-                            'invoice_background_color',
-                            'invoice_border_color',
-                            'invoice_header_bg_color',
-                        ]);
-
-                        $pdf = Pdf::loadView('purchase-orders.pdf', [
-                            'purchaseOrder' => $record,
-                            'settings' => $settings,
-                        ])->setPaper('a4', 'portrait');
-
-                        return response()->streamDownload(
-                            fn() => print($pdf->output()),
-                            'purchase-order-' . $record->po_number . '.pdf'
-                        );
-                    }),
-
-                // Email Action
-                Tables\Actions\Action::make('email')
-                    ->label('Send Email')
-                    ->icon('heroicon-o-envelope')
-                    ->form([
-                        Forms\Components\TextInput::make('email')
-                            ->label('Email Address')
-                            ->email()
-                            ->required()
-                            ->default(fn(PurchaseOrder $record): string => $record->vendor->email ?? ''),
-                        Forms\Components\Textarea::make('message')
-                            ->label('Additional Message')
-                            ->placeholder('Add any additional message for the vendor...')
-                            ->rows(3),
-                    ])
-                    ->action(function (array $data, PurchaseOrder $record): void {
-                        try {
-                            Mail::to($data['email'])->send(new PurchaseOrderMail($record));
+                            $record->updateTotalPaidAndStatus();
 
                             \Filament\Notifications\Notification::make()
-                                ->title('Purchase order emailed successfully')
-                                ->body('Purchase order #' . $record->po_number . ' has been sent to ' . $data['email'])
+                                ->title('Payment added successfully')
                                 ->success()
                                 ->send();
-                        } catch (\Exception $e) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Email failed')
-                                ->body('Failed to send email: ' . $e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                        })
+                        ->visible(fn(\App\Models\PurchaseOrder $record): bool => $record->remaining_balance > 0),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->size('sm')
+                    ->color('gray')
+                    ->button(),
 
-                Tables\Actions\Action::make('addPayment')
-                    ->label('Add Payment')
-                    ->icon('heroicon-o-currency-dollar')
-                    ->form([
-                        Forms\Components\Placeholder::make('payable_amount')
-                            ->label('Payable Amount')
-                            ->content(fn(\App\Models\PurchaseOrder $record): string => 'Rs' . number_format($record->remaining_balance, 2)),
-                        Forms\Components\TextInput::make('amount')
-                            ->label('Payment Amount')
-                            ->numeric()
-                            ->required()
-                            ->step(0.01)
-                            ->maxValue(fn(\App\Models\PurchaseOrder $record): float => $record->remaining_balance),
-                        Forms\Components\DatePicker::make('payment_date')
-                            ->label('Payment Date')
-                            ->required()
-                            ->default(now()),
-                        Forms\Components\Select::make('payment_method')
-                            ->label('Payment Method')
-                            ->options([
-                                'Cash' => 'Cash',
-                                'Bank Transfer' => 'Bank Transfer',
-                                'Card' => 'Card',
-                                'Other' => 'Other',
-                            ])
-                            ->nullable(),
-                        Forms\Components\Textarea::make('notes')
-                            ->columnSpan('full'),
-                    ])
-                    ->action(function (array $data, \App\Models\PurchaseOrder $record): void {
-                        $record->payments()->create([
-                            'amount' => $data['amount'],
-                            'payment_date' => $data['payment_date'],
-                            'payment_method' => $data['payment_method'],
-                            'notes' => $data['notes'],
-                        ]);
+                // Document Actions Group - Print, Download, Email
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('print')
+                        ->label('Print')
+                        ->icon('heroicon-o-printer')
+                        ->color('gray')
+                        ->url(fn(PurchaseOrder $record): string => route('purchase-orders.print', $record))
+                        ->openUrlInNewTab(),
 
-                        $record->updateTotalPaidAndStatus();
+                    Tables\Actions\Action::make('download')
+                        ->label('Download PDF')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('info')
+                        ->action(function (PurchaseOrder $record) {
+                            $settings = Setting::getMany([
+                                'invoice_company_name',
+                                'invoice_company_tagline',
+                                'invoice_logo_enabled',
+                                'invoice_show_contact_info',
+                                'invoice_contact_numbers',
+                                'invoice_show_logo_section',
+                                'invoice_show_customer_section',
+                                'invoice_show_contact_section',
+                                'invoice_show_invoice_details_section',
+                                'invoice_show_services_table',
+                                'invoice_show_payment_info',
+                                'invoice_show_terms_section',
+                                'invoice_show_footer_section',
+                                'invoice_payment_accounts',
+                                'invoice_footer_note',
+                                'invoice_thank_you_message',
+                                'invoice_additional_info',
+                                'invoice_primary_color',
+                                'invoice_secondary_color',
+                                'invoice_text_color',
+                                'invoice_background_color',
+                                'invoice_border_color',
+                                'invoice_header_bg_color',
+                            ]);
 
-                        \Filament\Notifications\Notification::make()
-                            ->title('Payment added successfully')
-                            ->success()
-                            ->send();
-                    })
-                    ->visible(fn(\App\Models\PurchaseOrder $record): bool => $record->remaining_balance > 0), // Hide if fully paid
+                            $pdf = Pdf::loadView('purchase-orders.pdf', [
+                                'purchaseOrder' => $record,
+                                'settings' => $settings,
+                            ])->setPaper('a4', 'portrait');
+
+                            return response()->streamDownload(
+                                fn() => print($pdf->output()),
+                                'purchase-order-' . $record->po_number . '.pdf'
+                            );
+                        }),
+
+                    Tables\Actions\Action::make('email')
+                        ->label('Send Email')
+                        ->icon('heroicon-o-envelope')
+                        ->color('warning')
+                        ->form([
+                            Forms\Components\TextInput::make('email')
+                                ->label('Email Address')
+                                ->email()
+                                ->required()
+                                ->default(fn(PurchaseOrder $record): string => $record->vendor->email ?? ''),
+                            Forms\Components\Textarea::make('message')
+                                ->label('Additional Message')
+                                ->placeholder('Add any additional message for the vendor...')
+                                ->rows(3),
+                        ])
+                        ->action(function (array $data, PurchaseOrder $record): void {
+                            try {
+                                Mail::to($data['email'])->send(new PurchaseOrderMail($record));
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Purchase order emailed successfully')
+                                    ->body('Purchase order #' . $record->po_number . ' has been sent to ' . $data['email'])
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Email failed')
+                                    ->body('Failed to send email: ' . $e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                ])
+                    ->label('Documents')
+                    ->icon('heroicon-m-document-text')
+                    ->size('sm')
+                    ->color('gray')
+                    ->button(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-
-                    // Bulk Email Action
+                    // Communication Actions
                     Tables\Actions\BulkAction::make('bulkEmail')
-                        ->label('Send Emails')
+                        ->label('Send Emails to Vendors')
                         ->icon('heroicon-o-envelope')
+                        ->color('warning')
                         ->form([
                             Forms\Components\Textarea::make('message')
                                 ->label('Additional Message')
@@ -557,8 +574,24 @@ class PurchaseOrderResource extends Resource
                                     ->send();
                             }
                         })
-                        ->deselectRecordsAfterCompletion(),
-                ]),
+                        ->deselectRecordsAfterCompletion()
+                        ->requiresConfirmation()
+                        ->modalHeading('Send Purchase Orders via Email')
+                        ->modalDescription('This will send purchase order emails to all selected vendors. Make sure the vendors have valid email addresses.')
+                        ->modalSubmitActionLabel('Send Emails'),
+                ])
+                    ->label('Bulk Actions')
+                    ->color('gray'),
+
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->label('Delete Selected')
+                        ->modalHeading('Delete Purchase Orders')
+                        ->modalDescription('Are you sure you want to delete these purchase orders? This action cannot be undone.')
+                        ->color('danger'),
+                ])
+                    ->label('Management')
+                    ->color('danger'),
             ]);
     }
 
