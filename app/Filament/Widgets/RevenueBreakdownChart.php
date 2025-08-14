@@ -25,11 +25,29 @@ class RevenueBreakdownChart extends ChartWidget
             ->join('invoice_service', 'services.id', '=', 'invoice_service.service_id')
             ->join('invoices', 'invoice_service.invoice_id', '=', 'invoices.id')
             ->where('invoices.status', '!=', 'cancelled')
+            ->where('invoices.status', '!=', 'refunded')
+            ->where('invoices.status', '!=', 'draft')
             ->whereYear('invoices.invoice_date', now()->year)
             ->groupBy('categories.id', 'categories.name')
+            ->having('total_revenue', '>', 0)
             ->orderByDesc('total_revenue')
             ->limit(8)
             ->get();
+
+        // Ensure we have data
+        if ($serviceRevenue->isEmpty()) {
+            return [
+                'datasets' => [
+                    [
+                        'label' => 'Revenue (Rs)',
+                        'data' => [0],
+                        'backgroundColor' => ['#E5E7EB'],
+                        'borderWidth' => 0,
+                    ],
+                ],
+                'labels' => ['No Data Available'],
+            ];
+        }
 
         $colors = [
             '#FF6B35',

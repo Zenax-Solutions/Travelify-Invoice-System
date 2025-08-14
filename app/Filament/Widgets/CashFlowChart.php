@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\Payment;
 use App\Models\VendorPayment;
+use App\Models\InvoiceRefund;
 use Filament\Widgets\ChartWidget;
 use Carbon\Carbon;
 
@@ -27,10 +28,17 @@ class CashFlowChart extends ChartWidget
             $month = Carbon::now()->subMonths($i);
             $monthName = $month->format('M Y');
 
-            // Calculate revenue (payments received)
-            $revenue = Payment::whereYear('payment_date', $month->year)
+            // Calculate revenue (payments received minus refunds)
+            $payments = Payment::whereYear('payment_date', $month->year)
                 ->whereMonth('payment_date', $month->month)
                 ->sum('amount');
+
+            $refunds = InvoiceRefund::where('status', 'processed')
+                ->whereYear('refund_date', $month->year)
+                ->whereMonth('refund_date', $month->month)
+                ->sum('refund_amount');
+
+            $revenue = $payments - $refunds;
 
             // Calculate expenses (vendor payments)
             $expense = VendorPayment::whereYear('payment_date', $month->year)

@@ -29,6 +29,12 @@ class ComprehensiveFinancialOverview extends BaseWidget
         $this->month = (string) Carbon::now()->month;
     }
 
+    public function updatedYear(): void
+    {
+        // Reset month when year changes to avoid invalid combinations
+        $this->month = (string) Carbon::now()->month;
+    }
+
     protected function getStats(): array
     {
         $today = Carbon::today();

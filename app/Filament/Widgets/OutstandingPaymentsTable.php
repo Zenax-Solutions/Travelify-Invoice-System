@@ -77,9 +77,15 @@ class OutstandingPaymentsTable extends BaseWidget
                     ->label('Days Overdue')
                     ->getStateUsing(function ($record) {
                         if (!$record->tour_date) {
-                            return 'N/A';
+                            // If no tour date, check against invoice due_date or invoice_date
+                            $compareDate = $record->due_date ?? $record->invoice_date;
+                            if (!$compareDate) {
+                                return 'N/A';
+                            }
+                            $daysOverdue = Carbon::parse($compareDate)->diffInDays(Carbon::now(), false);
+                        } else {
+                            $daysOverdue = Carbon::parse($record->tour_date)->diffInDays(Carbon::now(), false);
                         }
-                        $daysOverdue = Carbon::parse($record->tour_date)->diffInDays(Carbon::now(), false);
                         return $daysOverdue > 0 ? $daysOverdue : 0;
                     })
                     ->badge()
@@ -88,7 +94,7 @@ class OutstandingPaymentsTable extends BaseWidget
                         if ($state == 0) return 'success';
                         if ($state <= 7) return 'warning';
                         if ($state <= 30) return 'danger';
-                        return 'gray';
+                        return 'danger';
                     })
                     ->sortable(),
 

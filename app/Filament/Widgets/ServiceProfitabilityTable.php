@@ -22,12 +22,17 @@ class ServiceProfitabilityTable extends BaseWidget
             ->query(
                 Service::query()
                     ->join('categories', 'services.category_id', '=', 'categories.id')
-                    ->leftJoin('invoice_service', 'services.id', '=', 'invoice_service.service_id')
+                    ->leftJoin('invoice_service', function ($join) {
+                        $join->on('services.id', '=', 'invoice_service.service_id');
+                    })
                     ->leftJoin('invoices', function ($join) {
                         $join->on('invoice_service.invoice_id', '=', 'invoices.id')
-                            ->where('invoices.status', '!=', 'cancelled');
+                            ->where('invoices.status', '!=', 'cancelled')
+                            ->where('invoices.status', '!=', 'refunded');
                     })
-                    ->leftJoin('purchase_order_items', 'services.id', '=', 'purchase_order_items.service_id')
+                    ->leftJoin('purchase_order_items', function ($join) {
+                        $join->on('services.id', '=', 'purchase_order_items.service_id');
+                    })
                     ->leftJoin('purchase_orders', function ($join) {
                         $join->on('purchase_order_items.purchase_order_id', '=', 'purchase_orders.id')
                             ->where('purchase_orders.status', '!=', 'cancelled');
@@ -37,13 +42,13 @@ class ServiceProfitabilityTable extends BaseWidget
                         'services.name',
                         'services.price',
                         'categories.name as category_name',
-                        DB::raw('COALESCE(SUM(invoice_service.quantity * invoice_service.unit_price), 0) as total_revenue'),
-                        DB::raw('COALESCE(SUM(purchase_order_items.quantity * purchase_order_items.unit_price), 0) as total_cost'),
+                        DB::raw('COALESCE(SUM(DISTINCT CASE WHEN invoices.id IS NOT NULL THEN invoice_service.quantity * invoice_service.unit_price ELSE 0 END), 0) as total_revenue'),
+                        DB::raw('COALESCE(SUM(DISTINCT CASE WHEN purchase_orders.id IS NOT NULL THEN purchase_order_items.quantity * purchase_order_items.unit_price ELSE 0 END), 0) as total_cost'),
                         DB::raw('COUNT(DISTINCT invoice_service.id) as times_sold'),
-                        DB::raw('COALESCE(SUM(invoice_service.quantity * invoice_service.unit_price), 0) - COALESCE(SUM(purchase_order_items.quantity * purchase_order_items.unit_price), 0) as profit'),
+                        DB::raw('COALESCE(SUM(DISTINCT CASE WHEN invoices.id IS NOT NULL THEN invoice_service.quantity * invoice_service.unit_price ELSE 0 END), 0) - COALESCE(SUM(DISTINCT CASE WHEN purchase_orders.id IS NOT NULL THEN purchase_order_items.quantity * purchase_order_items.unit_price ELSE 0 END), 0) as profit'),
                         DB::raw('CASE 
-                            WHEN COALESCE(SUM(invoice_service.quantity * invoice_service.unit_price), 0) > 0 
-                            THEN ((COALESCE(SUM(invoice_service.quantity * invoice_service.unit_price), 0) - COALESCE(SUM(purchase_order_items.quantity * purchase_order_items.unit_price), 0)) / COALESCE(SUM(invoice_service.quantity * invoice_service.unit_price), 0)) * 100 
+                            WHEN COALESCE(SUM(DISTINCT CASE WHEN invoices.id IS NOT NULL THEN invoice_service.quantity * invoice_service.unit_price ELSE 0 END), 0) > 0 
+                            THEN ((COALESCE(SUM(DISTINCT CASE WHEN invoices.id IS NOT NULL THEN invoice_service.quantity * invoice_service.unit_price ELSE 0 END), 0) - COALESCE(SUM(DISTINCT CASE WHEN purchase_orders.id IS NOT NULL THEN purchase_order_items.quantity * purchase_order_items.unit_price ELSE 0 END), 0)) / COALESCE(SUM(DISTINCT CASE WHEN invoices.id IS NOT NULL THEN invoice_service.quantity * invoice_service.unit_price ELSE 0 END), 0)) * 100 
                             ELSE 0 
                         END as profit_margin')
                     ])
