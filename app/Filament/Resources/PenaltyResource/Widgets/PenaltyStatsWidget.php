@@ -46,7 +46,7 @@ class PenaltyStatsWidget extends BaseWidget
             ->where('status', '!=', 'waived')
             ->sum('penalty_amount');
 
-        return '₹' . number_format($total, 2);
+        return 'Rs ' . number_format($total, 2);
     }
 
     private function getCustomerCharges(): string
@@ -56,7 +56,7 @@ class PenaltyStatsWidget extends BaseWidget
             ->where('status', 'applied')
             ->sum('customer_amount');
 
-        return '₹' . number_format($total, 2);
+        return 'Rs ' . number_format($total, 2);
     }
 
     private function getAgencyAbsorption(): string
@@ -66,6 +66,6 @@ class PenaltyStatsWidget extends BaseWidget
             ->where('status', '!=', 'waived')
             ->sum('agency_amount');
 
-        return '₹' . number_format($total, 2);
+        return 'Rs ' . number_format($total, 2);
     }
 }

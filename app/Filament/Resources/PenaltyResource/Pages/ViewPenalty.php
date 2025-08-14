@@ -44,7 +44,7 @@ class ViewPenalty extends ViewRecord
                 ->visible(fn(): bool => $this->record->status === 'approved' && !$this->record->invoice_updated)
                 ->requiresConfirmation()
                 ->modalHeading('Apply Penalty to Invoice')
-                ->modalDescription(fn() => "This will add ₹{$this->record->customer_amount} to Invoice #{$this->record->invoice->invoice_number}")
+                ->modalDescription(fn() => "This will add Rs {$this->record->customer_amount} to Invoice #{$this->record->invoice->invoice_number}")
                 ->action(function () {
                     if ($this->record->applyToInvoice()) {
                         Notification::make()
@@ -126,7 +126,7 @@ class ViewPenalty extends ViewRecord
                         ->schema([
                             TextEntry::make('penalty_amount')
                                 ->label('Total Amount')
-                                ->money('INR')
+                                ->money('LKR')
                                 ->size(TextEntry\TextEntrySize::Large),
 
                             TextEntry::make('penalty_bearer')
@@ -177,17 +177,17 @@ class ViewPenalty extends ViewRecord
                             ->schema([
                                 TextEntry::make('penalty_amount')
                                     ->label('Total Penalty Amount')
-                                    ->money('INR')
+                                    ->money('LKR')
                                     ->size(TextEntry\TextEntrySize::Large),
 
                                 TextEntry::make('customer_amount')
                                     ->label('Customer Amount (Add to Invoice)')
-                                    ->money('INR')
+                                    ->money('LKR')
                                     ->color('success'),
 
                                 TextEntry::make('agency_amount')
                                     ->label('Agency Amount (Internal Cost)')
-                                    ->money('INR')
+                                    ->money('LKR')
                                     ->color('danger'),
                             ]),
                     ]),

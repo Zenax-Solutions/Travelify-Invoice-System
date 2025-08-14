@@ -106,7 +106,7 @@ class PenaltyResource extends Resource
                         Forms\Components\TextInput::make('penalty_amount')
                             ->label('Total Penalty Amount')
                             ->numeric()
-                            ->prefix('₹')
+                            ->prefix('Rs ')
                             ->step(0.01)
                             ->required()
                             ->live()
@@ -166,14 +166,14 @@ class PenaltyResource extends Resource
                         Forms\Components\TextInput::make('customer_amount')
                             ->label('Customer Amount (Add to Invoice)')
                             ->numeric()
-                            ->prefix('₹')
+                            ->prefix('Rs ')
                             ->step(0.01)
                             ->default(0),
 
                         Forms\Components\TextInput::make('agency_amount')
                             ->label('Agency Amount (Internal Cost)')
                             ->numeric()
-                            ->prefix('₹')
+                            ->prefix('Rs ')
                             ->step(0.01)
                             ->default(0),
                     ])->columns(2),
@@ -254,7 +254,7 @@ class PenaltyResource extends Resource
 
                 Tables\Columns\TextColumn::make('penalty_amount')
                     ->label('Total Amount')
-                    ->money('INR')
+                    ->money('LKR')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('penalty_bearer')
@@ -275,12 +275,12 @@ class PenaltyResource extends Resource
 
                 Tables\Columns\TextColumn::make('customer_amount')
                     ->label('Customer')
-                    ->money('INR')
+                    ->money('LKR')
                     ->color('success'),
 
                 Tables\Columns\TextColumn::make('agency_amount')
                     ->label('Agency')
-                    ->money('INR')
+                    ->money('LKR')
                     ->color('danger'),
 
                 Tables\Columns\TextColumn::make('penalty_date')
@@ -380,7 +380,7 @@ class PenaltyResource extends Resource
                     ->visible(fn(Penalty $record): bool => $record->status === 'approved' && !$record->invoice_updated)
                     ->requiresConfirmation()
                     ->modalHeading('Apply Penalty to Invoice')
-                    ->modalDescription(fn(Penalty $record) => "This will add ₹{$record->customer_amount} to Invoice #{$record->invoice->invoice_number}")
+                    ->modalDescription(fn(Penalty $record) => "This will add Rs {$record->customer_amount} to Invoice #{$record->invoice->invoice_number}")
                     ->action(function (Penalty $record) {
                         if ($record->applyToInvoice()) {
                             Notification::make()

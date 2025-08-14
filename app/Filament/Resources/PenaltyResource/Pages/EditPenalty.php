@@ -41,7 +41,7 @@ class EditPenalty extends EditRecord
                 ->visible(fn(): bool => $this->record->status === 'approved' && !$this->record->invoice_updated)
                 ->requiresConfirmation()
                 ->modalHeading('Apply Penalty to Invoice')
-                ->modalDescription(fn() => "This will add ₹{$this->record->customer_amount} to Invoice #{$this->record->invoice->invoice_number}")
+                ->modalDescription(fn() => "This will add Rs {$this->record->customer_amount} to Invoice #{$this->record->invoice->invoice_number}")
                 ->action(function () {
                     if ($this->record->applyToInvoice()) {
                         Notification::make()
