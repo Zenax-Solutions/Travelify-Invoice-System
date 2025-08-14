@@ -76,11 +76,15 @@ class OutstandingPaymentsTable extends BaseWidget
                 Tables\Columns\TextColumn::make('days_overdue')
                     ->label('Days Overdue')
                     ->getStateUsing(function ($record) {
+                        if (!$record->tour_date) {
+                            return 'N/A';
+                        }
                         $daysOverdue = Carbon::parse($record->tour_date)->diffInDays(Carbon::now(), false);
                         return $daysOverdue > 0 ? $daysOverdue : 0;
                     })
                     ->badge()
                     ->color(function ($state) {
+                        if ($state === 'N/A') return 'gray';
                         if ($state == 0) return 'success';
                         if ($state <= 7) return 'warning';
                         if ($state <= 30) return 'danger';

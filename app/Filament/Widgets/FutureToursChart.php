@@ -16,6 +16,7 @@ class FutureToursChart extends ChartWidget
     {
         $data = Invoice::query()
             ->selectRaw('DATE(tour_date) as tour_date, count(*) as count')
+            ->whereNotNull('tour_date')
             ->where('tour_date', '>', now())
             ->groupBy('tour_date')
             ->orderBy('tour_date')

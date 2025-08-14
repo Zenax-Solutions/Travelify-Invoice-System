@@ -23,6 +23,7 @@ class CurrentDayToursTable extends BaseWidget
             ->query(
                 Invoice::query()
                     ->whereDate('tour_date', now()->toDateString())
+                    ->whereNotNull('tour_date')
                     ->where('status', 'paid')
                     ->orderBy('tour_date')
             )
