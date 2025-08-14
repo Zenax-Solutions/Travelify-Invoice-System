@@ -76,17 +76,31 @@ class OutstandingPaymentsTable extends BaseWidget
                 Tables\Columns\TextColumn::make('days_overdue')
                     ->label('Days Overdue')
                     ->getStateUsing(function ($record) {
-                        if (!$record->tour_date) {
-                            // If no tour date, check against invoice due_date or invoice_date
-                            $compareDate = $record->due_date ?? $record->invoice_date;
-                            if (!$compareDate) {
-                                return 'N/A';
-                            }
-                            $daysOverdue = Carbon::parse($compareDate)->diffInDays(Carbon::now(), false);
-                        } else {
-                            $daysOverdue = Carbon::parse($record->tour_date)->diffInDays(Carbon::now(), false);
+                        // Priority: due_date > tour_date > invoice_date
+                        $compareDate = null;
+
+                        if ($record->due_date) {
+                            $compareDate = $record->due_date;
+                        } elseif ($record->tour_date) {
+                            $compareDate = $record->tour_date;
+                        } elseif ($record->invoice_date) {
+                            $compareDate = $record->invoice_date;
                         }
-                        return $daysOverdue > 0 ? $daysOverdue : 0;
+
+                        if (!$compareDate) {
+                            return 'N/A';
+                        }
+
+                        $today = Carbon::now()->startOfDay();
+                        $dueDate = Carbon::parse($compareDate)->startOfDay();
+
+                        // If today is after the due date, calculate overdue days
+                        if ($today->greaterThan($dueDate)) {
+                            return $dueDate->diffInDays($today);
+                        }
+
+                        // Not overdue yet
+                        return 0;
                     })
                     ->badge()
                     ->color(function ($state) {
