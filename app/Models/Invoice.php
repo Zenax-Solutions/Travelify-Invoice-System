@@ -22,6 +22,8 @@ class Invoice extends Model
         'total_amount',
         'total_refunded',
         'net_amount',
+        'total_penalties',
+        'penalty_summary',
         'status',
         'cancelled_at',
         'cancellation_reason',
@@ -38,6 +40,8 @@ class Invoice extends Model
         'total_amount' => 'decimal:2',
         'total_refunded' => 'decimal:2',
         'net_amount' => 'decimal:2',
+        'total_penalties' => 'decimal:2',
+        'penalty_summary' => 'array',
     ];
 
     public function customer(): BelongsTo
@@ -67,21 +71,32 @@ class Invoice extends Model
         return $this->hasMany(InvoiceRefund::class);
     }
 
+    public function penalties(): HasMany
+    {
+        return $this->hasMany(Penalty::class);
+    }
+
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
-    // Accessor to calculate remaining balance (considering refunds)
+    // Accessor to calculate remaining balance (considering refunds and penalties)
     public function getRemainingBalanceAttribute(): float
     {
-        return $this->net_amount - $this->total_paid;
+        return $this->getEffectiveAmountAttribute() - $this->total_paid;
     }
 
-    // Accessor for net amount (total - refunds)
+    // Accessor for net amount (total - refunds + penalties)
     public function getNetAmountAttribute(): float
     {
         return $this->total_amount - $this->total_refunded;
+    }
+
+    // Accessor for effective amount (includes penalties applied to customer)
+    public function getEffectiveAmountAttribute(): float
+    {
+        return $this->total_amount - $this->total_refunded + ($this->total_penalties ?? 0);
     }
 
     // Check if invoice is cancelled
@@ -153,7 +168,7 @@ class Invoice extends Model
         $this->updateTotalPaidAndStatus();
     }
 
-    // Method to update total_paid and status (enhanced for refunds)
+    // Method to update total_paid and status (enhanced for refunds and penalties)
     public function updateTotalPaidAndStatus(): void
     {
         $this->total_paid = $this->payments()->sum('amount');
@@ -162,8 +177,8 @@ class Invoice extends Model
         if ($this->isCancelled()) {
             $this->status = 'cancelled';
         } else {
-            // Calculate effective payment against net amount
-            $effectiveBalance = $this->net_amount - $this->total_paid;
+            // Calculate effective payment against effective amount (includes penalties)
+            $effectiveBalance = $this->effective_amount - $this->total_paid;
 
             if ($effectiveBalance <= 0) {
                 $this->status = 'paid';

@@ -9,6 +9,7 @@ use App\Models\PurchaseOrder;
 use App\Models\VendorPayment;
 use App\Models\Customer;
 use App\Models\Vendor;
+use App\Models\Penalty;
 use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -60,6 +61,11 @@ class ComprehensiveFinancialOverview extends BaseWidget
         $monthlyRefunds = $this->calculateMonthlyRefunds();
         $cancelledInvoices = $this->calculateCancelledInvoices();
 
+        // PENALTY METRICS
+        $totalPenalties = $this->calculateTotalPenalties();
+        $monthlyPenalties = $this->calculateMonthlyPenalties();
+        $agencyAbsorbedPenalties = $this->calculateAgencyAbsorbedPenalties();
+
         // OUTSTANDING METRICS
         $outstandingReceivables = $this->calculateOutstandingReceivables();
         $outstandingPayables = $this->calculateOutstandingPayables();
@@ -108,9 +114,25 @@ class ComprehensiveFinancialOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-x-circle')
                 ->color('danger'),
 
+            // PENALTY SECTION
+            Stat::make('Total Penalties (Yearly)', 'Rs ' . number_format($totalPenalties, 2))
+                ->description('Total penalties applied this year')
+                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->color('warning'),
+
+            Stat::make('Monthly Penalties', 'Rs ' . number_format($monthlyPenalties, 2))
+                ->description('Penalties applied this month')
+                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->color('warning'),
+
+            Stat::make('Agency Absorbed', 'Rs ' . number_format($agencyAbsorbedPenalties, 2))
+                ->description('Penalties absorbed by agency this year')
+                ->descriptionIcon('heroicon-m-building-office')
+                ->color('danger'),
+
             // EXPENSE SECTION
             Stat::make('Total Expenses (Yearly)', 'Rs ' . number_format($totalExpenses, 2))
-                ->description('Total vendor payments this year')
+                ->description('Total vendor + penalty costs this year')
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->color('danger'),
 
@@ -183,7 +205,12 @@ class ComprehensiveFinancialOverview extends BaseWidget
             ->whereYear('refund_date', $this->year ?? Carbon::now()->year)
             ->sum('refund_amount');
 
-        return $payments - $refunds;
+        // Add customer-paid penalties as revenue
+        $customerPenalties = Penalty::where('status', 'applied')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->sum('customer_amount');
+
+        return $payments - $refunds + $customerPenalties;
     }
 
     private function calculateMonthlyRevenue(): float
@@ -197,7 +224,13 @@ class ComprehensiveFinancialOverview extends BaseWidget
             ->whereMonth('refund_date', $this->month ?? Carbon::now()->month)
             ->sum('refund_amount');
 
-        return $payments - $refunds;
+        // Add customer-paid penalties as revenue
+        $customerPenalties = Penalty::where('status', 'applied')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->whereMonth('penalty_date', $this->month ?? Carbon::now()->month)
+            ->sum('customer_amount');
+
+        return $payments - $refunds + $customerPenalties;
     }
 
     private function calculateDailyRevenue(): float
@@ -208,20 +241,40 @@ class ComprehensiveFinancialOverview extends BaseWidget
             ->whereDate('refund_date', Carbon::today())
             ->sum('refund_amount');
 
-        return $payments - $refunds;
+        // Add customer-paid penalties as revenue
+        $customerPenalties = Penalty::where('status', 'applied')
+            ->whereDate('penalty_date', Carbon::today())
+            ->sum('customer_amount');
+
+        return $payments - $refunds + $customerPenalties;
     }
 
     private function calculateTotalExpenses(): float
     {
-        return VendorPayment::whereYear('payment_date', $this->year ?? Carbon::now()->year)
+        $vendorPayments = VendorPayment::whereYear('payment_date', $this->year ?? Carbon::now()->year)
             ->sum('amount');
+
+        // Add agency-absorbed penalties as expenses
+        $agencyPenalties = Penalty::where('status', '!=', 'waived')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->sum('agency_amount');
+
+        return $vendorPayments + $agencyPenalties;
     }
 
     private function calculateMonthlyExpenses(): float
     {
-        return VendorPayment::whereYear('payment_date', $this->year ?? Carbon::now()->year)
+        $vendorPayments = VendorPayment::whereYear('payment_date', $this->year ?? Carbon::now()->year)
             ->whereMonth('payment_date', $this->month ?? Carbon::now()->month)
             ->sum('amount');
+
+        // Add agency-absorbed penalties as expenses
+        $agencyPenalties = Penalty::where('status', '!=', 'waived')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->whereMonth('penalty_date', $this->month ?? Carbon::now()->month)
+            ->sum('agency_amount');
+
+        return $vendorPayments + $agencyPenalties;
     }
 
     private function calculateOutstandingReceivables(): float
@@ -265,5 +318,28 @@ class ComprehensiveFinancialOverview extends BaseWidget
         return Invoice::where('status', 'cancelled')
             ->whereYear('cancelled_at', $this->year ?? Carbon::now()->year)
             ->count();
+    }
+
+    // PENALTY CALCULATION METHODS
+    private function calculateTotalPenalties(): float
+    {
+        return Penalty::where('status', 'applied')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->sum('customer_amount');
+    }
+
+    private function calculateMonthlyPenalties(): float
+    {
+        return Penalty::where('status', 'applied')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->whereMonth('penalty_date', $this->month ?? Carbon::now()->month)
+            ->sum('customer_amount');
+    }
+
+    private function calculateAgencyAbsorbedPenalties(): float
+    {
+        return Penalty::where('status', '!=', 'waived')
+            ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
+            ->sum('agency_amount');
     }
 }

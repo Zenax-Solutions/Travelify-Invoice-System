@@ -29,7 +29,9 @@ class OutstandingPaymentsTable extends BaseWidget
                     ])
                     ->join('customers', 'invoices.customer_id', '=', 'customers.id')
                     ->where('invoices.status', '!=', 'paid')
-                    ->whereRaw('invoices.total_amount > invoices.total_paid')
+                    ->where('invoices.status', '!=', 'cancelled')
+                    ->where('invoices.status', '!=', 'refunded')
+                    ->whereRaw('(invoices.total_amount + COALESCE(invoices.total_penalties, 0) - COALESCE(invoices.total_refunded, 0)) > invoices.total_paid')
                     ->orderBy('invoices.invoice_date')
             )
             ->columns([
@@ -69,7 +71,9 @@ class OutstandingPaymentsTable extends BaseWidget
                     ->color('danger')
                     ->weight('bold')
                     ->getStateUsing(function ($record) {
-                        return $record->total_amount - $record->total_paid;
+                        // Use effective amount (includes penalties)
+                        $effectiveAmount = $record->total_amount - $record->total_refunded + ($record->total_penalties ?? 0);
+                        return $effectiveAmount - $record->total_paid;
                     })
                     ->sortable(),
 
