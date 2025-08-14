@@ -1,14 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-us            $table->boolean('invoice_reissued')->default(false);
-            $table->timestamp('reissue_completed_at')->nullable();
-            $table->unsignedBigInteger('reissued_invoice_id')->nullable();
-
-            $table->timestamps();
-            
-            // Foreign key for the new re-issued invoice
-            $table->foreign('reissued_invoice_id')->references('id')->on('invoices')->onDelete('set null');luminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration

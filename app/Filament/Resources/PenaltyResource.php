@@ -431,11 +431,9 @@ class PenaltyResource extends Resource
 
                 Tables\Columns\TextColumn::make('reissuedInvoice.invoice_number')
                     ->label('New Invoice')
-                    ->url(fn($record) => $record->reissued_invoice_id ?
-                        route('filament.admin.resources.invoices.view', $record->reissued_invoice_id) : null)
                     ->color('primary')
                     ->icon('heroicon-o-arrow-top-right-on-square')
-                    ->tooltip('Click to view the re-issued invoice')
+                    ->tooltip('Re-issued invoice number')
                     ->visible(fn($record) => $record->invoice_reissued && $record->reissued_invoice_id)
                     ->toggleable(),
 
