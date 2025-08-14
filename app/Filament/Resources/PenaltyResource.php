@@ -38,20 +38,85 @@ class PenaltyResource extends Resource
                     ->description('Enter the details of the penalty or fee')
                     ->schema([
                         Forms\Components\Select::make('invoice_id')
-                            ->label('Invoice')
-                            ->relationship('invoice', 'invoice_number', fn(Builder $query) => $query->whereNotIn('status', ['cancelled']))
-                            ->searchable()
+                            ->label('Select Invoice')
+                            ->relationship('invoice', 'invoice_number', function (Builder $query) {
+                                return $query->whereNotIn('status', ['cancelled'])
+                                    ->with(['customer', 'services'])
+                                    ->orderBy('invoice_date', 'desc');
+                            })
+                            ->searchable(['invoice_number', 'customer.name', 'customer.email'])
+                            ->getSearchResultsUsing(function (string $search): array {
+                                return Invoice::with('customer')
+                                    ->whereNotIn('status', ['cancelled'])
+                                    ->where(function ($query) use ($search) {
+                                        $query->where('invoice_number', 'like', "%{$search}%")
+                                            ->orWhereHas('customer', function ($q) use ($search) {
+                                                $q->where('name', 'like', "%{$search}%")
+                                                    ->orWhere('email', 'like', "%{$search}%");
+                                            });
+                                    })
+                                    ->limit(10)
+                                    ->get()
+                                    ->mapWithKeys(function ($invoice) {
+                                        return [
+                                            $invoice->id => $invoice->invoice_number . ' - ' . $invoice->customer->name . ' (Rs ' . number_format($invoice->total_amount, 2) . ')'
+                                        ];
+                                    })
+                                    ->toArray();
+                            })
+                            ->getOptionLabelUsing(function ($value): ?string {
+                                $invoice = Invoice::with('customer')->find($value);
+                                return $invoice ? $invoice->invoice_number . ' - ' . $invoice->customer->name : null;
+                            })
                             ->preload()
                             ->required()
                             ->live()
                             ->afterStateUpdated(function ($state, Forms\Set $set) {
                                 if ($state) {
-                                    $invoice = Invoice::find($state);
-                                    if ($invoice && $invoice->tour_date) {
-                                        $set('original_tour_date', $invoice->tour_date);
+                                    $invoice = Invoice::with('customer')->find($state);
+                                    if ($invoice) {
+                                        // Auto-fill tour date if available (handle visa-only invoices)
+                                        if ($invoice->tour_date) {
+                                            $set('original_tour_date', $invoice->tour_date->toDateString());
+                                        } else {
+                                            // For visa-only or other invoices without tour date
+                                            $set('original_tour_date', null);
+                                        }
+
+                                        // Set penalty date to today
+                                        $set('penalty_date', now()->toDateString());
                                     }
                                 }
-                            }),
+                            })
+                            ->columnSpanFull(),
+
+                        // Invoice Preview Component
+                        Forms\Components\Placeholder::make('invoice_preview')
+                            ->label('')
+                            ->content(function (Forms\Get $get): string {
+                                $invoiceId = $get('invoice_id');
+                                if (!$invoiceId) {
+                                    return '';
+                                }
+
+                                $invoice = Invoice::with(['customer', 'services'])->find($invoiceId);
+                                if (!$invoice) {
+                                    return '';
+                                }
+
+                                $totalPaid = $invoice->payments()->sum('amount');
+                                $effectiveAmount = $invoice->total_amount - ($invoice->total_refunded ?? 0) + ($invoice->total_penalties ?? 0);
+                                $remainingBalance = $effectiveAmount - $totalPaid;
+
+                                return view('filament.components.invoice-preview', [
+                                    'invoice' => $invoice,
+                                    'totalPaid' => $totalPaid,
+                                    'remainingBalance' => $remainingBalance,
+                                    'effectiveAmount' => $effectiveAmount
+                                ])->render();
+                            })
+                            ->visible(fn(Forms\Get $get): bool => (bool) $get('invoice_id'))
+                            ->columnSpanFull(),
 
                         Forms\Components\Select::make('penalty_type')
                             ->label('Penalty Type')
@@ -178,6 +243,40 @@ class PenaltyResource extends Resource
                             ->default(0),
                     ])->columns(2),
 
+                Section::make('Invoice Re-issue Settings')
+                    ->description('Configure how this penalty affects the invoice')
+                    ->schema([
+                        Forms\Components\Placeholder::make('reissue_warning')
+                            ->content('⚠️ **Financial Accuracy Notice:** When an invoice is marked as re-issued, the original invoice will be automatically cancelled to prevent duplicate financial records and ensure accurate dashboard calculations.')
+                            ->visible(fn(Forms\Get $get) => $get('penalty_type') === 'date_change')
+                            ->columnSpanFull(),
+
+                        Forms\Components\Toggle::make('requires_invoice_reissue')
+                            ->label('Requires Invoice Re-issue')
+                            ->helperText('Enable this if the penalty requires updating tour dates or invoice details')
+                            ->default(false)
+                            ->live()
+                            ->visible(fn(Forms\Get $get) => $get('penalty_type') === 'date_change'),
+
+                        Forms\Components\Textarea::make('reissue_notes')
+                            ->label('Re-issue Instructions')
+                            ->placeholder('Specify what needs to be updated on the invoice (dates, services, etc.)')
+                            ->rows(2)
+                            ->visible(fn(Forms\Get $get) => $get('requires_invoice_reissue') && $get('penalty_type') === 'date_change'),
+
+                        Forms\Components\Select::make('reissue_priority')
+                            ->label('Re-issue Priority')
+                            ->options([
+                                'urgent' => 'Urgent (Process Today)',
+                                'high' => 'High (Within 2 Days)',
+                                'normal' => 'Normal (Within Week)',
+                                'low' => 'Low (No Rush)'
+                            ])
+                            ->default('normal')
+                            ->visible(fn(Forms\Get $get) => $get('requires_invoice_reissue') && $get('penalty_type') === 'date_change'),
+                    ])->columns(1)
+                    ->visible(fn(Forms\Get $get) => $get('penalty_type') === 'date_change'),
+
                 Section::make('Additional Information')
                     ->description('Provide reason and supporting documentation')
                     ->schema([
@@ -299,6 +398,47 @@ class PenaltyResource extends Resource
                         default => 'gray'
                     }),
 
+                Tables\Columns\IconColumn::make('requires_invoice_reissue')
+                    ->label('Reissue Required')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-document-duplicate')
+                    ->falseIcon('heroicon-o-check-circle')
+                    ->trueColor('warning')
+                    ->falseColor('success')
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('reissue_priority')
+                    ->label('Priority')
+                    ->badge()
+                    ->color(fn(?string $state): string => match ($state) {
+                        'high' => 'danger',
+                        'medium' => 'warning',
+                        'low' => 'success',
+                        default => 'gray'
+                    })
+                    ->visible(fn($record) => $record->requires_invoice_reissue)
+                    ->toggleable(),
+
+                Tables\Columns\IconColumn::make('invoice_reissued')
+                    ->label('Reissued')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-clock')
+                    ->trueColor('success')
+                    ->falseColor('warning')
+                    ->visible(fn($record) => $record->requires_invoice_reissue)
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('reissuedInvoice.invoice_number')
+                    ->label('New Invoice')
+                    ->url(fn($record) => $record->reissued_invoice_id ?
+                        route('filament.admin.resources.invoices.view', $record->reissued_invoice_id) : null)
+                    ->color('primary')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->tooltip('Click to view the re-issued invoice')
+                    ->visible(fn($record) => $record->invoice_reissued && $record->reissued_invoice_id)
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created')
                     ->dateTime('d/m/Y H:i')
@@ -352,7 +492,33 @@ class PenaltyResource extends Resource
                                 $data['until'],
                                 fn(Builder $query, $date): Builder => $query->whereDate('penalty_date', '<=', $date),
                             );
-                    })
+                    }),
+
+                Tables\Filters\Filter::make('requires_reissue')
+                    ->label('Requires Invoice Re-issue')
+                    ->query(fn(Builder $query): Builder => $query->where('requires_invoice_reissue', true))
+                    ->toggle(),
+
+                Tables\Filters\Filter::make('pending_reissue')
+                    ->label('Pending Re-issue')
+                    ->query(fn(Builder $query): Builder => $query->where('requires_invoice_reissue', true)
+                        ->where('invoice_reissued', false)
+                        ->where('status', 'applied'))
+                    ->toggle(),
+
+                SelectFilter::make('reissue_priority')
+                    ->label('Re-issue Priority')
+                    ->options([
+                        'low' => 'Low Priority',
+                        'medium' => 'Medium Priority',
+                        'high' => 'High Priority',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            $data['value'],
+                            fn(Builder $query, $value): Builder => $query->where('reissue_priority', $value)
+                        );
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -386,6 +552,48 @@ class PenaltyResource extends Resource
                             Notification::make()
                                 ->title('Penalty Applied to Invoice')
                                 ->success()
+                                ->send();
+                        }
+                    }),
+
+                Tables\Actions\Action::make('mark_reissued')
+                    ->label('Mark Reissued')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->color('success')
+                    ->visible(fn(Penalty $record): bool => $record->requires_invoice_reissue && !$record->invoice_reissued && $record->status === 'applied')
+                    ->requiresConfirmation()
+                    ->modalHeading('Mark Invoice as Reissued')
+                    ->modalDescription('Confirm that the invoice has been reissued with updated information.')
+                    ->form([
+                        Forms\Components\Textarea::make('reissue_completion_notes')
+                            ->label('Completion Notes')
+                            ->placeholder('Any additional notes about the reissue process...')
+                            ->rows(3),
+
+                        Forms\Components\Select::make('new_invoice_id')
+                            ->label('New Re-issued Invoice')
+                            ->placeholder('Select the newly created invoice')
+                            ->searchable()
+                            ->options(function () {
+                                return \App\Models\Invoice::whereNotIn('status', ['cancelled', 'draft'])
+                                    ->orderBy('created_at', 'desc')
+                                    ->limit(50)
+                                    ->pluck('invoice_number', 'id');
+                            })
+                            ->helperText('Select the new invoice that replaces the cancelled one')
+                    ])
+                    ->action(function (Penalty $record, array $data) {
+                        if ($record->markInvoiceReissued($data['reissue_completion_notes'] ?? null, $data['new_invoice_id'] ?? null)) {
+                            Notification::make()
+                                ->title('Invoice Marked as Reissued')
+                                ->body('Original invoice has been cancelled and new invoice linked.')
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Reissue Failed')
+                                ->body('Failed to complete the invoice reissue process.')
+                                ->danger()
                                 ->send();
                         }
                     }),

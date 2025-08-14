@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Penalty extends Model
 {
@@ -32,7 +34,13 @@ class Penalty extends Model
         'approved_at',
         'invoice_updated',
         'expense_recorded',
-        'expense_id'
+        'expense_id',
+        'requires_invoice_reissue',
+        'reissue_notes',
+        'reissue_priority',
+        'invoice_reissued',
+        'reissue_completed_at',
+        'reissued_invoice_id'
     ];
 
     protected $casts = [
@@ -43,9 +51,12 @@ class Penalty extends Model
         'customer_amount' => 'decimal:2',
         'agency_amount' => 'decimal:2',
         'approved_at' => 'datetime',
+        'reissued_at' => 'datetime',
         'attachments' => 'array',
         'invoice_updated' => 'boolean',
-        'expense_recorded' => 'boolean'
+        'expense_recorded' => 'boolean',
+        'requires_invoice_reissue' => 'boolean',
+        'invoice_reissued' => 'boolean'
     ];
 
     // Relationships
@@ -67,6 +78,11 @@ class Penalty extends Model
     public function expense(): BelongsTo
     {
         return $this->belongsTo(VendorPayment::class, 'expense_id');
+    }
+
+    public function reissuedInvoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'reissued_invoice_id');
     }
 
     // Accessors
@@ -191,7 +207,53 @@ class Penalty extends Model
         return true;
     }
 
-    public function waive(string $reason = null): bool
+    public function markInvoiceReissued($completionNotes = null, $newInvoiceId = null)
+    {
+        if (!$this->requires_invoice_reissue || $this->invoice_reissued) {
+            return false;
+        }
+
+        // Start database transaction for financial consistency
+        DB::beginTransaction();
+
+        try {
+            // Cancel the old invoice to prevent duplicate financial records
+            $this->cancelOriginalInvoice($completionNotes);
+
+            // Update penalty record
+            $this->update([
+                'invoice_reissued' => true,
+                'reissue_completed_at' => now(),
+                'reissued_invoice_id' => $newInvoiceId,
+                'reissue_notes' => $completionNotes ?
+                    ($this->reissue_notes ? $this->reissue_notes . "\n\nCompleted: " . $completionNotes : $completionNotes) :
+                    $this->reissue_notes
+            ]);
+
+            DB::commit();
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Invoice reissue failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    protected function cancelOriginalInvoice($reason = null)
+    {
+        if (!$this->invoice) {
+            return false;
+        }
+
+        $cancellationReason = $reason ?
+            "Invoice cancelled due to penalty re-issue: " . $reason :
+            "Invoice cancelled due to date change penalty - new invoice issued";
+
+        // Use the Invoice model's cancel method for proper cancellation
+        return $this->invoice->cancel($cancellationReason, Auth::id() ?? $this->created_by);
+    }
+
+    public function waive($reason)
     {
         if (!in_array($this->status, ['pending', 'approved'])) {
             return false;
@@ -205,6 +267,17 @@ class Penalty extends Model
         ]);
 
         return true;
+    }
+
+    public function getReissuePriorityColorAttribute(): string
+    {
+        return match ($this->reissue_priority) {
+            'urgent' => 'danger',
+            'high' => 'warning',
+            'normal' => 'info',
+            'low' => 'gray',
+            default => 'gray'
+        };
     }
 
     // Static methods for reporting

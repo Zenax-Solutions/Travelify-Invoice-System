@@ -1,7 +1,14 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
+us            $table->boolean('invoice_reissued')->default(false);
+            $table->timestamp('reissue_completed_at')->nullable();
+            $table->unsignedBigInteger('reissued_invoice_id')->nullable();
+
+            $table->timestamps();
+            
+            // Foreign key for the new re-issued invoice
+            $table->foreign('reissued_invoice_id')->references('id')->on('invoices')->onDelete('set null');luminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -52,7 +59,18 @@ return new class extends Migration
             $table->boolean('expense_recorded')->default(false);
             $table->foreignId('expense_id')->nullable(); // Link to expense record
 
+            // Invoice re-issue tracking
+            $table->boolean('requires_invoice_reissue')->default(false);
+            $table->text('reissue_notes')->nullable();
+            $table->enum('reissue_priority', ['urgent', 'high', 'normal', 'low'])->default('normal');
+            $table->boolean('invoice_reissued')->default(false);
+            $table->timestamp('reissue_completed_at')->nullable();
+            $table->unsignedBigInteger('reissued_invoice_id')->nullable(); // Track the new re-issued invoice
+
             $table->timestamps();
+
+            // Foreign keys
+            $table->foreign('reissued_invoice_id')->references('id')->on('invoices')->onDelete('set null');
 
             // Indexes for better performance
             $table->index(['invoice_id', 'status']);
