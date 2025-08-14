@@ -93,27 +93,29 @@ class PenaltyResource extends Resource
                         // Invoice Preview Component
                         Forms\Components\Placeholder::make('invoice_preview')
                             ->label('')
-                            ->content(function (Forms\Get $get): string {
+                            ->content(function (Forms\Get $get) {
                                 $invoiceId = $get('invoice_id');
                                 if (!$invoiceId) {
-                                    return '';
+                                    return new \Illuminate\Support\HtmlString('');
                                 }
 
                                 $invoice = Invoice::with(['customer', 'services'])->find($invoiceId);
                                 if (!$invoice) {
-                                    return '';
+                                    return new \Illuminate\Support\HtmlString('');
                                 }
 
                                 $totalPaid = $invoice->payments()->sum('amount');
                                 $effectiveAmount = $invoice->total_amount - ($invoice->total_refunded ?? 0) + ($invoice->total_penalties ?? 0);
                                 $remainingBalance = $effectiveAmount - $totalPaid;
 
-                                return view('filament.components.invoice-preview', [
-                                    'invoice' => $invoice,
-                                    'totalPaid' => $totalPaid,
-                                    'remainingBalance' => $remainingBalance,
-                                    'effectiveAmount' => $effectiveAmount
-                                ])->render();
+                                return new \Illuminate\Support\HtmlString(
+                                    view('filament.components.invoice-preview', [
+                                        'invoice' => $invoice,
+                                        'totalPaid' => $totalPaid,
+                                        'remainingBalance' => $remainingBalance,
+                                        'effectiveAmount' => $effectiveAmount
+                                    ])->render()
+                                );
                             })
                             ->visible(fn(Forms\Get $get): bool => (bool) $get('invoice_id'))
                             ->columnSpanFull(),
@@ -131,9 +133,9 @@ class PenaltyResource extends Resource
                             ])
                             ->required()
                             ->live()
-                            ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
                                 // Auto-set penalty date to today for new penalties
-                                if ($state && !$set('penalty_date')) {
+                                if ($state && !$get('penalty_date')) {
                                     $set('penalty_date', now()->toDateString());
                                 }
                             }),

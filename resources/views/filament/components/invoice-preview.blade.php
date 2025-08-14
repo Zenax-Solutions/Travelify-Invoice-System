@@ -1,3 +1,4 @@
+@if($invoice)
 <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-4" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);">
     <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold text-gray-900 flex items-center">
@@ -164,3 +165,4 @@
     </div>
     @endif
 </div>
+@endif
