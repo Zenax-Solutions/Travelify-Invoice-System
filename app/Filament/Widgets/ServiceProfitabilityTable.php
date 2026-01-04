@@ -14,7 +14,7 @@ class ServiceProfitabilityTable extends BaseWidget
     protected static ?string $description = 'Revenue vs Cost analysis for each service';
     protected int | string | array $columnSpan = 'full';
     protected static ?string $pollingInterval = null;
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 6;
 
     public function table(Table $table): Table
     {

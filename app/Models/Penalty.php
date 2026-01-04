@@ -62,27 +62,27 @@ class Penalty extends Model
     // Relationships
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        return $this->belongsTo(\App\Models\Invoice::class);
     }
 
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
     public function approvedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(\App\Models\User::class, 'approved_by');
     }
 
     public function expense(): BelongsTo
     {
-        return $this->belongsTo(VendorPayment::class, 'expense_id');
+        return $this->belongsTo(\App\Models\VendorPayment::class, 'expense_id');
     }
 
     public function reissuedInvoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class, 'reissued_invoice_id');
+        return $this->belongsTo(\App\Models\Invoice::class, 'reissued_invoice_id');
     }
 
     // Accessors
@@ -153,33 +153,142 @@ class Penalty extends Model
             return false;
         }
 
-        // Update invoice with customer portion
-        if ($this->customer_amount > 0) {
-            $this->invoice->increment('total_amount', $this->customer_amount);
-            $this->invoice->increment('total_penalties', $this->customer_amount);
+        DB::beginTransaction();
+
+        try {
+            // Check if this penalty requires invoice reissue
+            if ($this->requires_invoice_reissue) {
+                // Create draft reissued invoice automatically
+                $draftInvoice = $this->createDraftReissuedInvoice();
+
+                if ($draftInvoice) {
+                    // Mark the penalty as processed with reissue
+                    $this->update([
+                        'status' => 'applied',
+                        'invoice_updated' => true,
+                        'reissued_invoice_id' => $draftInvoice->id
+                    ]);
+
+                    DB::commit();
+                    Log::info("Penalty {$this->id} applied with auto-created draft invoice {$draftInvoice->id}");
+                    return true;
+                }
+            } else {
+                // Apply penalty to existing invoice (original behavior)
+                if ($this->customer_amount > 0) {
+                    $this->invoice->increment('total_amount', $this->customer_amount);
+                    $this->invoice->increment('total_penalties', $this->customer_amount);
+                }
+
+                // Update penalty summary
+                $penaltySummary = $this->invoice->penalty_summary ?? [];
+                $penaltySummary[] = [
+                    'penalty_id' => $this->id,
+                    'type' => $this->penalty_type,
+                    'amount' => $this->customer_amount,
+                    'date' => $this->penalty_date->toDateString(),
+                    'reason' => $this->reason
+                ];
+
+                $this->invoice->update(['penalty_summary' => $penaltySummary]);
+
+                // Recalculate invoice status with new totals
+                $this->invoice->updateTotalPaidAndStatus();
+
+                $this->update([
+                    'status' => 'applied',
+                    'invoice_updated' => true
+                ]);
+
+                DB::commit();
+                return true;
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Apply penalty to invoice failed: ' . $e->getMessage());
+            return false;
         }
 
-        // Update penalty summary
-        $penaltySummary = $this->invoice->penalty_summary ?? [];
-        $penaltySummary[] = [
-            'penalty_id' => $this->id,
-            'type' => $this->penalty_type,
-            'amount' => $this->customer_amount,
-            'date' => $this->penalty_date->toDateString(),
-            'reason' => $this->reason
-        ];
+        DB::rollBack();
+        return false;
+    }
 
-        $this->invoice->update(['penalty_summary' => $penaltySummary]);
+    /**
+     * Create a draft reissued invoice with penalty applied
+     */
+    protected function createDraftReissuedInvoice()
+    {
+        if (!$this->invoice) {
+            return null;
+        }
 
-        // Recalculate invoice status with new totals
-        $this->invoice->updateTotalPaidAndStatus();
+        $originalInvoice = $this->invoice;
 
-        $this->update([
-            'status' => 'applied',
-            'invoice_updated' => true
+        // Generate new invoice number for the reissued invoice
+        $newInvoiceNumber = $this->generateReissuedInvoiceNumber($originalInvoice->invoice_number);
+
+        // Create new invoice as draft with penalty applied
+        $draftInvoice = \App\Models\Invoice::create([
+            'customer_id' => $originalInvoice->customer_id,
+            'invoice_number' => $newInvoiceNumber,
+            'invoice_date' => now(),
+            'due_date' => now()->addDays(30), // Default 30 days
+            'tour_date' => $this->new_tour_date ?? $originalInvoice->tour_date,
+            'subtotal' => $originalInvoice->subtotal,
+            'tax_amount' => $originalInvoice->tax_amount,
+            'total_amount' => $originalInvoice->total_amount + $this->customer_amount,
+            'total_paid' => 0.00, // Start fresh for payments
+            'net_amount' => $originalInvoice->total_amount + $this->customer_amount,
+            'total_penalties' => $this->customer_amount,
+            'penalty_summary' => [[
+                'penalty_id' => $this->id,
+                'type' => $this->penalty_type,
+                'amount' => $this->customer_amount,
+                'date' => $this->penalty_date->toDateString(),
+                'reason' => $this->reason
+            ]],
+            'status' => 'draft', // Created as draft for review
+            'created_by' => Auth::id(),
+            'updated_by' => Auth::id(),
         ]);
 
-        return true;
+        // Copy services from original invoice
+        if ($originalInvoice->services) {
+            foreach ($originalInvoice->services as $service) {
+                $draftInvoice->services()->attach($service->id, [
+                    'quantity' => $service->pivot->quantity,
+                    'price' => $service->pivot->price,
+                    'total' => $service->pivot->total,
+                ]);
+            }
+        }
+
+        // Cancel the original invoice now that we have created the reissue
+        $this->cancelOriginalInvoice("Invoice reissued due to penalty: {$this->reason}");
+
+        Log::info("Auto-created draft invoice {$draftInvoice->invoice_number} for penalty {$this->id} and cancelled original invoice {$originalInvoice->invoice_number}");
+
+        return $draftInvoice;
+    }
+
+    /**
+     * Generate a unique invoice number for reissued invoice
+     */
+    protected function generateReissuedInvoiceNumber($originalNumber): string
+    {
+        // Extract base number and add reissue suffix
+        $baseParts = explode('-', $originalNumber);
+        $baseNumber = implode('-', array_slice($baseParts, 0, -1)); // Remove last part
+        $counter = 1;
+
+        // Find next available reissue number
+        do {
+            $newNumber = $baseNumber . '-R' . str_pad($counter, 2, '0', STR_PAD_LEFT);
+            $exists = \App\Models\Invoice::where('invoice_number', $newNumber)->exists();
+            $counter++;
+        } while ($exists && $counter < 100);
+
+        return $newNumber;
     }
 
     public function recordAsExpense(): bool

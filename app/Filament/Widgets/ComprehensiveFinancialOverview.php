@@ -323,14 +323,24 @@ class ComprehensiveFinancialOverview extends BaseWidget
     // PENALTY CALCULATION METHODS
     private function calculateTotalPenalties(): float
     {
-        return Penalty::where('status', 'applied')
+        // Include penalties that are applied OR those that resulted in invoice reissue
+        return Penalty::whereIn('status', ['applied'])
+            ->where(function ($query) {
+                $query->where('invoice_updated', true)
+                    ->orWhere('invoice_reissued', true);
+            })
             ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
             ->sum('customer_amount');
     }
 
     private function calculateMonthlyPenalties(): float
     {
-        return Penalty::where('status', 'applied')
+        // Include penalties that are applied OR those that resulted in invoice reissue
+        return Penalty::whereIn('status', ['applied'])
+            ->where(function ($query) {
+                $query->where('invoice_updated', true)
+                    ->orWhere('invoice_reissued', true);
+            })
             ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
             ->whereMonth('penalty_date', $this->month ?? Carbon::now()->month)
             ->sum('customer_amount');
@@ -338,7 +348,13 @@ class ComprehensiveFinancialOverview extends BaseWidget
 
     private function calculateAgencyAbsorbedPenalties(): float
     {
-        return Penalty::where('status', '!=', 'waived')
+        // Include all penalties except waived ones that have financial impact
+        return Penalty::whereIn('status', ['applied'])
+            ->where(function ($query) {
+                $query->where('invoice_updated', true)
+                    ->orWhere('invoice_reissued', true)
+                    ->orWhere('expense_recorded', true);
+            })
             ->whereYear('penalty_date', $this->year ?? Carbon::now()->year)
             ->sum('agency_amount');
     }

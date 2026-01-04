@@ -102,7 +102,7 @@
                 <strong>Due Date:</strong> {{$invoice->due_date->format('Y-m-d')}}<br>
                 @endif
                 @if($invoice->tour_date)
-                <strong>Tour Date:</strong> {{$invoice->tour_date->format('Y-m-d')}}<br>
+                <strong>Tour Date:</strong> {{$invoice->tour_date->format('d-m-Y')}}<br>
                 @endif
                 <br>
 

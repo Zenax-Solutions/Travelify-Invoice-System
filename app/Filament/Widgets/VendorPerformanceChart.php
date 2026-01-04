@@ -13,7 +13,7 @@ class VendorPerformanceChart extends ChartWidget
     protected static ?string $description = 'Most active vendors this year';
     protected static ?string $pollingInterval = null;
     protected int | string | array $columnSpan = 1;
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected function getData(): array
     {

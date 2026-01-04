@@ -12,7 +12,7 @@ class RevenueBreakdownChart extends ChartWidget
     protected static ?string $description = 'Revenue distribution across different services';
     protected static ?string $pollingInterval = null;
     protected int | string | array $columnSpan = 1;
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 5;
 
     protected function getData(): array
     {

@@ -15,7 +15,7 @@ class CashFlowChart extends ChartWidget
     protected static ?string $description = 'Revenue (with penalties) vs Expenses over the last 12 months';
     protected static ?string $pollingInterval = null;
     protected int | string | array $columnSpan = 2;
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected function getData(): array
     {

@@ -16,6 +16,7 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use App\Filament\Widgets\FinancialOverview;
 use App\Filament\Widgets\ComprehensiveFinancialOverview;
+use App\Filament\Widgets\PenaltyReissueOverview;
 use App\Filament\Widgets\CashFlowChart;
 use App\Filament\Widgets\VendorPerformanceChart;
 use App\Filament\Widgets\RevenueBreakdownChart;
@@ -68,12 +69,15 @@ class AdminPanelProvider extends PanelProvider
                 // Priority 1: Most critical financial overview
                 ComprehensiveFinancialOverview::class,
 
-                // Priority 2-4: Key analytical charts  
+                // Priority 2: Penalty and re-issue management
+                PenaltyReissueOverview::class,
+
+                // Priority 3-5: Key analytical charts  
                 CashFlowChart::class,
                 VendorPerformanceChart::class,
                 RevenueBreakdownChart::class,
 
-                // Priority 5-6: Detailed tables
+                // Priority 6-7: Detailed tables
                 ServiceProfitabilityTable::class,
                 OutstandingPaymentsTable::class,
 

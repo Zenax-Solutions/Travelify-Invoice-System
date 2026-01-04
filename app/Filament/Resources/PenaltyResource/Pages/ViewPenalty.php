@@ -46,10 +46,52 @@ class ViewPenalty extends ViewRecord
                 ->modalHeading('Apply Penalty to Invoice')
                 ->modalDescription(fn() => "This will add Rs {$this->record->customer_amount} to Invoice #{$this->record->invoice->invoice_number}")
                 ->action(function () {
-                    if ($this->record->applyToInvoice()) {
+                    try {
+                        if ($this->record->applyToInvoice()) {
+                            // Refresh the record to get updated data
+                            $this->record->refresh();
+
+                            if ($this->record->requires_invoice_reissue && $this->record->reissued_invoice_id) {
+                                $reissuedInvoice = \App\Models\Invoice::find($this->record->reissued_invoice_id);
+                                Notification::make()
+                                    ->title('Penalty Applied Successfully!')
+                                    ->body("Draft invoice {$reissuedInvoice->invoice_number} created. Original invoice cancelled.")
+                                    ->success()
+                                    ->actions([
+                                        \Filament\Notifications\Actions\Action::make('view_invoice')
+                                            ->label('View New Invoice')
+                                            ->url(route('filament.admin.resources.invoices.view', $reissuedInvoice))
+                                            ->markAsRead(),
+                                    ])
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('Penalty Applied to Invoice')
+                                    ->body('Penalty applied to existing invoice successfully')
+                                    ->success()
+                                    ->send();
+                            }
+
+                            // Refresh the page to show updated data
+                            $this->fillForm();
+                        } else {
+                            Notification::make()
+                                ->title('Failed to Apply Penalty')
+                                ->body('Please check if penalty is approved and not already applied')
+                                ->warning()
+                                ->send();
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Penalty application failed', [
+                            'penalty_id' => $this->record->id,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ]);
+
                         Notification::make()
-                            ->title('Penalty Applied to Invoice')
-                            ->success()
+                            ->title('Error Applying Penalty')
+                            ->body('Error: ' . $e->getMessage())
+                            ->danger()
                             ->send();
                     }
                 }),
@@ -144,11 +186,6 @@ class ViewPenalty extends ViewRecord
                                     'shared' => 'warning',
                                     default => 'gray'
                                 }),
-
-                            TextEntry::make('days_changed')
-                                ->label('Days Changed')
-                                ->visible(fn(): bool => $this->record->penalty_type === 'date_change' && $this->record->days_changed)
-                                ->formatStateUsing(fn(?int $state): string => $state ? "{$state} days" : 'N/A'),
                         ])->grow(false),
                 ]),
 
@@ -206,7 +243,7 @@ class ViewPenalty extends ViewRecord
                         TextEntry::make('attachments')
                             ->label('Attachments')
                             ->listWithLineBreaks()
-                            ->visible(fn(): bool => !empty($this->record->attachments)),
+                            ->visible(fn(): bool => !empty($this->record->attachments) && is_array($this->record->attachments)),
                     ]),
 
                 Section::make('Approval Information')
@@ -222,12 +259,12 @@ class ViewPenalty extends ViewRecord
 
                                 TextEntry::make('approvedBy.name')
                                     ->label('Approved By')
-                                    ->visible(fn(): bool => $this->record->approved_by),
+                                    ->visible(fn(): bool => !empty($this->record->approved_by)),
 
                                 TextEntry::make('approved_at')
                                     ->label('Approved At')
                                     ->dateTime('d M Y, H:i')
-                                    ->visible(fn(): bool => $this->record->approved_at),
+                                    ->visible(fn(): bool => !empty($this->record->approved_at)),
                             ]),
                     ]),
 
