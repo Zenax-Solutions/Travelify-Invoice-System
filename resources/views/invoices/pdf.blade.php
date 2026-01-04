@@ -97,9 +97,9 @@
                     </div>
                 </div><br>
                 <strong>Invoice No</strong><br> <span style="color: red;font-weight: bold;">#{{ $invoice->invoice_number }}</span><br>
-                <strong>Date:</strong> {{$invoice?->invoice_date->format('Y-m-d')}}<br>
+                <strong>Date:</strong> {{$invoice?->invoice_date->format('d-m-Y')}}<br>
                 @if($invoice->due_date)
-                <strong>Due Date:</strong> {{$invoice->due_date->format('Y-m-d')}}<br>
+                <strong>Due Date:</strong> {{$invoice->due_date->format('d-m-Y')}}<br>
                 @endif
                 @if($invoice->tour_date)
                 <strong>Tour Date:</strong> {{$invoice->tour_date->format('d-m-Y')}}<br>
