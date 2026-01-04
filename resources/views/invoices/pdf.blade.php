@@ -141,6 +141,33 @@
                     <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold;">SUB TOTAL</td>
                     <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold; color:red">{{ number_format($invoice->total_amount, 2) }}</td>
                 </tr>
+                @if($invoice->total_refunded > 0)
+                <tr>
+                    <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold; color: #FF8C00;">REFUNDED</td>
+                    <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold; color: #FF8C00;">- {{ number_format($invoice->total_refunded, 2) }}</td>
+                </tr>
+                <tr>
+                    <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold;">NET TOTAL</td>
+                    <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold;">{{ number_format($invoice->net_amount, 2) }}</td>
+                </tr>
+                @endif
+                @if($invoice->total_paid > 0)
+                <tr>
+                    <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold; color: #28a745;">PAID AMOUNT</td>
+                    <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold; color: #28a745;">{{ number_format($invoice->total_paid, 2) }}</td>
+                </tr>
+                @endif
+                @if($invoice->remaining_balance > 0)
+                <tr>
+                    <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold; color: #dc3545;">DUE AMOUNT</td>
+                    <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold; color: #dc3545; font-size: 16px;">{{ number_format($invoice->remaining_balance, 2) }}</td>
+                </tr>
+                @elseif($invoice->status == 'paid')
+                <tr>
+                    <td colspan="4" style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; text-align: right; font-weight: bold; color: #28a745;">DUE AMOUNT</td>
+                    <td style="border: 1px solid {{ $borderColor }}; padding: 6px 4px; vertical-align: top; word-wrap: break-word; font-weight: bold; color: #28a745;">0.00</td>
+                </tr>
+                @endif
             </tfoot>
         </table>
         @endif
